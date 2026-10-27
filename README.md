@@ -1,13 +1,6 @@
 # Ubuntu Niri Rice
 
-My reproducible Ubuntu-on-ARM desktop setup: Niri for scrolling window
-management, DankMaterialShell/Quickshell for the shell, and RiceMood + Matugen
-for wallpaper-derived colors across native apps, browsers, editors, terminals,
-icons, and custom widgets.
-
-The visual direction is a restrained dark glass desktop with JetBrains Mono,
-compact spacing, and one wallpaper-derived accent rather than a collection of
-unrelated application themes.
+Ported rice to my github with gpt because some people asked for it
 
 ## Theme flow
 
