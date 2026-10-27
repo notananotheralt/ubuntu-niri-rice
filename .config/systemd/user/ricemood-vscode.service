@@ -1,0 +1,6 @@
+[Unit]
+Description=Apply the current RiceMood palette to VS Code
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/ricemood-vscode-theme

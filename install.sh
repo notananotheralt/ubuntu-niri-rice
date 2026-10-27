@@ -6,6 +6,8 @@
 #   ./install.sh             install everything
 #   ./install.sh --dry-run   show what would happen, change nothing
 #   ./install.sh --no-omz    skip installing oh-my-zsh
+#   ./install.sh --no-vscode-theme
+#                            skip the RiceMood VS Code integration
 #
 # What it does:
 #   1. Copies each rc file here into your home directory, e.g.
@@ -15,6 +17,8 @@
 #   2. Copies gitconfig to ~/.gitconfig.rc and tells git to also read it
 #      (your name and email stay in ~/.gitconfig, out of this repository).
 #   3. Installs oh-my-zsh, if zsh is available.
+#   4. Installs the RiceMood VS Code palette generator and its event-driven
+#      systemd watcher, if DankMaterialShell has produced a palette.
 #
 # Safe to run more than once. Nothing is ever deleted: a file already in
 # the way is renamed to  ~/.NAME.backup-DATE-TIME  first.
@@ -23,7 +27,10 @@ set -eu
 
 # Files in this repository that become ~/.NAME. Missing ones are skipped,
 # so add names here as your collection grows.
-FILES=".bashrc .zshrc .vimrc .gdbinit"
+FILES=".bashrc .zshrc .vimrc .gdbinit
+.local/bin/ricemood-vscode-theme
+.config/systemd/user/ricemood-vscode.path
+.config/systemd/user/ricemood-vscode.service"
 
 OMZ_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
 
@@ -32,10 +39,12 @@ OMZ_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.
 # ---------------------------------------------------------------------------
 DRY_RUN=0
 INSTALL_OMZ=1
+INSTALL_RICEMOOD_VSCODE=1
 for arg in "$@"; do
     case "$arg" in
         -n|--dry-run) DRY_RUN=1 ;;
         --no-omz)     INSTALL_OMZ=0 ;;
+        --no-vscode-theme) INSTALL_RICEMOOD_VSCODE=0 ;;
         -h|--help)    sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)            echo "unknown option: $arg  (try --help)" >&2; exit 1 ;;
     esac
@@ -52,6 +61,39 @@ run() {
         echo "          would run: $*"
     else
         "$@"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# 3. RiceMood-backed VS Code colors
+# ---------------------------------------------------------------------------
+setup_ricemood_vscode() {
+    if [ "$INSTALL_RICEMOOD_VSCODE" -eq 0 ]; then
+        echo "skip      RiceMood VS Code theme (--no-vscode-theme)"
+        return
+    fi
+
+    local helper="$HOME/.local/bin/ricemood-vscode-theme"
+    if [ "$DRY_RUN" -eq 0 ]; then
+        chmod 0755 "$helper"
+    else
+        echo "          would make $helper executable"
+    fi
+
+    if [ -r "$HOME/.cache/DankMaterialShell/dms-colors.json" ]; then
+        echo "theme     VS Code from the current RiceMood palette"
+        run "$helper"
+    else
+        echo "wait      VS Code theme (DankMaterialShell palette not generated yet)"
+        echo "          The watcher will apply it after the next palette change."
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "enable    ricemood-vscode.path"
+        run systemctl --user daemon-reload
+        run systemctl --user enable --now ricemood-vscode.path
+    else
+        echo "skip      live VS Code updates (systemd is unavailable)"
     fi
 }
 
@@ -184,6 +226,8 @@ for f in $FILES; do
 done
 
 setup_gitconfig
+
+setup_ricemood_vscode
 
 if [ "$INSTALL_OMZ" -eq 1 ]; then
     install_omz

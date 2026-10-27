@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""Project the current RiceMood palette into VS Code user settings."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import re
+import stat
+
+
+PALETTE_PATH = Path.home() / ".cache" / "DankMaterialShell" / "dms-colors.json"
+SETTINGS_PATH = Path.home() / ".config" / "Code" / "User" / "settings.json"
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def alpha(color: str, opacity: int) -> str:
+    return f"{color}{opacity:02x}"
+
+
+def blend(foreground: str, background: str, weight: float) -> str:
+    foreground_rgb = [int(foreground[index:index + 2], 16) for index in (1, 3, 5)]
+    background_rgb = [int(background[index:index + 2], 16) for index in (1, 3, 5)]
+    return "#" + "".join(
+        f"{round(front * weight + back * (1 - weight)):02x}"
+        for front, back in zip(foreground_rgb, background_rgb)
+    )
+
+
+def load_colors() -> tuple[dict[str, str], dict[str, str]]:
+    with PALETTE_PATH.open(encoding="utf-8") as handle:
+        palette = json.load(handle)
+
+    colors = palette["colors"]["dark"]
+    terminal = {
+        name: palette["dank16"][name]["dark"]
+        for name in (f"color{index}" for index in range(16))
+    }
+    if not all(HEX_COLOR.fullmatch(value) for value in (*colors.values(), *terminal.values())):
+        raise ValueError("RiceMood produced an invalid color value")
+    return colors, terminal
+
+
+def workbench_colors(c: dict[str, str], t: dict[str, str]) -> dict[str, str]:
+    clear = "#00000000"
+    git_green = blend(t["color10"], c["surface"], 0.70)
+    return {
+        "focusBorder": c["primary"],
+        "foreground": c["on_surface"],
+        "disabledForeground": alpha(c["on_surface_variant"], 0x66),
+        "descriptionForeground": c["on_surface_variant"],
+        "errorForeground": c["error"],
+        "icon.foreground": c["on_surface_variant"],
+        "textLink.foreground": c["primary"],
+        "textLink.activeForeground": c["primary_fixed"],
+        "textPreformat.foreground": c["tertiary"],
+        "textBlockQuote.background": c["surface_container_high"],
+        "textBlockQuote.border": c["primary_container"],
+        "sash.hoverBorder": c["primary"],
+        "window.activeBorder": alpha(c["primary"], 0x66),
+        "window.inactiveBorder": c["outline_variant"],
+        "titleBar.activeBackground": c["surface_container_lowest"],
+        "titleBar.activeForeground": c["on_surface"],
+        "titleBar.inactiveBackground": c["surface_container_lowest"],
+        "titleBar.inactiveForeground": alpha(c["on_surface_variant"], 0x99),
+        "activityBar.background": c["surface_container_lowest"],
+        "activityBar.foreground": c["primary"],
+        "activityBar.inactiveForeground": c["outline"],
+        "activityBar.activeBorder": c["primary"],
+        "activityBar.activeBackground": c["surface_container_low"],
+        "activityBarBadge.background": c["primary"],
+        "activityBarBadge.foreground": c["on_primary"],
+        "activityBarTop.foreground": c["primary"],
+        "activityBarTop.activeBorder": c["primary"],
+        "sideBar.background": c["surface"],
+        "sideBar.foreground": c["on_surface_variant"],
+        "sideBar.border": c["outline_variant"],
+        "sideBarTitle.foreground": c["primary"],
+        "sideBarSectionHeader.background": c["surface_container_high"],
+        "sideBarSectionHeader.foreground": c["on_surface"],
+        "sideBarSectionHeader.border": c["outline_variant"],
+        "editorGroup.border": c["outline_variant"],
+        "editorGroupHeader.tabsBackground": c["surface_container_lowest"],
+        "editorGroupHeader.tabsBorder": c["outline_variant"],
+        "editorGroupHeader.noTabsBackground": c["surface"],
+        "tab.activeBackground": c["surface"],
+        "tab.activeForeground": c["on_surface"],
+        "tab.activeBorderTop": c["primary"],
+        "tab.activeBorder": clear,
+        "tab.inactiveBackground": c["surface_container_lowest"],
+        "tab.inactiveForeground": c["on_surface_variant"],
+        "tab.unfocusedActiveForeground": c["on_surface_variant"],
+        "tab.unfocusedActiveBorderTop": alpha(c["primary"], 0x88),
+        "tab.hoverBackground": c["surface_container_high"],
+        "tab.hoverForeground": c["on_surface"],
+        "tab.border": c["outline_variant"],
+        "editor.background": c["surface"],
+        "editor.foreground": c["on_surface"],
+        "editorCursor.foreground": c["primary"],
+        "editorCursor.background": c["surface"],
+        "editorLineNumber.foreground": c["outline"],
+        "editorLineNumber.activeForeground": c["primary"],
+        "editor.lineHighlightBackground": c["surface_container_high"],
+        "editor.lineHighlightBorder": clear,
+        "editor.selectionBackground": alpha(c["primary_container"], 0xCC),
+        "editor.selectionForeground": c["on_primary_container"],
+        "editor.inactiveSelectionBackground": alpha(c["secondary_container"], 0x88),
+        "editor.selectionHighlightBackground": alpha(c["primary"], 0x24),
+        "editor.wordHighlightBackground": alpha(c["tertiary"], 0x22),
+        "editor.wordHighlightStrongBackground": alpha(c["primary"], 0x2E),
+        "editor.findMatchBackground": alpha(c["tertiary_container"], 0xF0),
+        "editor.findMatchForeground": c["on_tertiary_container"],
+        "editor.findMatchBorder": c["tertiary"],
+        "editor.findMatchHighlightBackground": alpha(c["tertiary"], 0x38),
+        "editorWhitespace.foreground": alpha(c["outline_variant"], 0x99),
+        "editorIndentGuide.background1": alpha(c["outline_variant"], 0x77),
+        "editorIndentGuide.activeBackground1": alpha(c["primary"], 0xAA),
+        "editorRuler.foreground": c["outline_variant"],
+        "editorCodeLens.foreground": c["outline"],
+        "editorLink.activeForeground": c["primary"],
+        "editorBracketHighlight.foreground1": c["primary"],
+        "editorBracketHighlight.foreground2": c["tertiary"],
+        "editorBracketHighlight.foreground3": c["secondary"],
+        "editorBracketHighlight.foreground4": t["color10"],
+        "editorBracketHighlight.foreground5": t["color12"],
+        "editorBracketHighlight.foreground6": t["color14"],
+        "editorBracketHighlight.unexpectedBracket.foreground": c["error"],
+        "editorError.foreground": c["error"],
+        "editorWarning.foreground": c["tertiary"],
+        "editorInfo.foreground": c["primary"],
+        "editorHint.foreground": c["secondary"],
+        "editorGutter.addedBackground": t["color2"],
+        "editorGutter.modifiedBackground": c["tertiary"],
+        "editorGutter.deletedBackground": c["error"],
+        "editorOverviewRuler.border": clear,
+        "minimap.background": c["surface_container_lowest"],
+        "minimap.selectionHighlight": alpha(c["primary"], 0x66),
+        "minimap.findMatchHighlight": c["tertiary"],
+        "minimap.errorHighlight": c["error"],
+        "minimap.warningHighlight": c["tertiary"],
+        "scrollbar.shadow": c["shadow"],
+        "scrollbarSlider.background": alpha(c["outline_variant"], 0x66),
+        "scrollbarSlider.hoverBackground": alpha(c["outline"], 0x88),
+        "scrollbarSlider.activeBackground": alpha(c["primary"], 0x88),
+        "list.activeSelectionBackground": c["primary_container"],
+        "list.activeSelectionForeground": c["on_primary_container"],
+        "list.inactiveSelectionBackground": c["surface_container_highest"],
+        "list.inactiveSelectionForeground": c["on_surface"],
+        "list.hoverBackground": c["surface_container_high"],
+        "list.hoverForeground": c["on_surface"],
+        "list.focusBackground": c["primary_container"],
+        "list.focusForeground": c["on_primary_container"],
+        "list.highlightForeground": c["primary"],
+        "listFilterWidget.background": c["surface_container_highest"],
+        "listFilterWidget.outline": c["primary"],
+        "input.background": c["surface_container_low"],
+        "input.foreground": c["on_surface"],
+        "input.border": c["outline_variant"],
+        "input.placeholderForeground": c["outline"],
+        "inputOption.activeBackground": alpha(c["primary_container"], 0xCC),
+        "inputOption.activeBorder": c["primary"],
+        "dropdown.background": c["surface_container_high"],
+        "dropdown.foreground": c["on_surface"],
+        "dropdown.border": c["outline_variant"],
+        "button.background": c["primary_container"],
+        "button.foreground": c["on_primary_container"],
+        "button.hoverBackground": c["on_primary_fixed_variant"],
+        "button.secondaryBackground": c["surface_container_highest"],
+        "button.secondaryForeground": c["on_surface"],
+        "badge.background": c["primary_container"],
+        "badge.foreground": c["on_primary_container"],
+        "progressBar.background": c["primary"],
+        "welcomePage.background": c["surface"],
+        "welcomePage.tileBackground": c["surface_container_highest"],
+        "welcomePage.tileHoverBackground": c["surface_bright"],
+        "welcomePage.progress.background": c["surface_container_highest"],
+        "welcomePage.progress.foreground": c["primary"],
+        "walkThrough.embeddedEditorBackground": c["surface_container_lowest"],
+        "pickerGroup.foreground": c["primary"],
+        "pickerGroup.border": c["outline_variant"],
+        "quickInput.background": c["surface_container_high"],
+        "quickInput.foreground": c["on_surface"],
+        "quickInputList.focusBackground": c["primary_container"],
+        "quickInputList.focusForeground": c["on_primary_container"],
+        "commandCenter.background": c["surface_container_low"],
+        "commandCenter.foreground": c["on_surface"],
+        "commandCenter.border": c["outline_variant"],
+        "commandCenter.activeBackground": c["surface_container_high"],
+        "panel.background": c["surface_container_lowest"],
+        "panel.border": c["outline_variant"],
+        "panelTitle.activeBorder": c["primary"],
+        "panelTitle.activeForeground": c["on_surface"],
+        "panelTitle.inactiveForeground": c["on_surface_variant"],
+        "terminal.background": c["surface_container_lowest"],
+        "terminal.foreground": c["on_surface"],
+        "terminalCursor.foreground": c["primary"],
+        "terminalCursor.background": c["surface_container_lowest"],
+        **{f"terminal.ansi{label}": t[f"color{index}"] for index, label in enumerate((
+            "Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White",
+            "BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue",
+            "BrightMagenta", "BrightCyan", "BrightWhite",
+        ))},
+        "statusBar.background": c["surface_container_highest"],
+        "statusBar.foreground": c["on_surface"],
+        "statusBar.border": c["outline_variant"],
+        "statusBar.noFolderBackground": c["surface_container_low"],
+        "statusBar.debuggingBackground": c["tertiary_container"],
+        "statusBar.debuggingForeground": c["on_tertiary_container"],
+        "statusBarItem.prominentBackground": c["primary_container"],
+        "statusBarItem.prominentForeground": c["on_primary_container"],
+        "statusBarItem.remoteBackground": c["primary_container"],
+        "statusBarItem.remoteForeground": c["on_primary_container"],
+        "notificationCenterHeader.background": c["surface_container_high"],
+        "notifications.background": c["surface_container_high"],
+        "notifications.foreground": c["on_surface"],
+        "notifications.border": c["outline_variant"],
+        "notificationLink.foreground": c["primary"],
+        "gitDecoration.addedResourceForeground": git_green,
+        "gitDecoration.modifiedResourceForeground": c["tertiary"],
+        "gitDecoration.deletedResourceForeground": c["error"],
+        "gitDecoration.renamedResourceForeground": c["secondary"],
+        "gitDecoration.untrackedResourceForeground": git_green,
+        "gitDecoration.ignoredResourceForeground": c["outline"],
+        "gitDecoration.conflictingResourceForeground": t["color9"],
+        "gitDecoration.stageModifiedResourceForeground": c["tertiary_fixed_dim"],
+        "gitDecoration.stageDeletedResourceForeground": c["error"],
+        "diffEditor.insertedTextBackground": alpha(t["color2"], 0x22),
+        "diffEditor.removedTextBackground": alpha(c["error"], 0x22),
+        "diffEditor.insertedLineBackground": alpha(t["color2"], 0x12),
+        "diffEditor.removedLineBackground": alpha(c["error"], 0x12),
+        "peekView.border": c["primary"],
+        "peekViewEditor.background": c["surface_container_lowest"],
+        "peekViewResult.background": c["surface"],
+        "peekViewResult.selectionBackground": c["primary_container"],
+        "peekViewTitle.background": c["surface_container_high"],
+        "breadcrumb.foreground": c["on_surface_variant"],
+        "breadcrumb.focusForeground": c["primary"],
+        "breadcrumb.activeSelectionForeground": c["on_surface"],
+    }
+
+
+def textmate_rules(c: dict[str, str], t: dict[str, str]) -> list[dict[str, object]]:
+    return [
+        {"scope": ["comment", "punctuation.definition.comment"], "settings": {"foreground": c["outline"], "fontStyle": "italic"}},
+        {"scope": ["string", "string.quoted", "string.template"], "settings": {"foreground": t["color10"]}},
+        {"scope": ["constant.numeric", "constant.language", "constant.character"], "settings": {"foreground": c["tertiary"]}},
+        {"scope": ["keyword", "storage.type", "storage.modifier"], "settings": {"foreground": c["primary"]}},
+        {"scope": ["entity.name.type", "entity.name.class", "entity.name.interface", "support.type"], "settings": {"foreground": c["tertiary_fixed_dim"]}},
+        {"scope": ["entity.name.function", "support.function", "meta.function-call"], "settings": {"foreground": c["primary_fixed"]}},
+        {"scope": ["variable", "meta.object-literal.key", "support.variable.property"], "settings": {"foreground": c["on_surface"]}},
+        {"scope": ["variable.parameter"], "settings": {"foreground": c["secondary"]}},
+        {"scope": ["entity.name.tag"], "settings": {"foreground": c["primary"]}},
+        {"scope": ["entity.other.attribute-name"], "settings": {"foreground": c["tertiary"]}},
+        {"scope": ["keyword.operator", "punctuation.accessor", "punctuation.separator"], "settings": {"foreground": c["on_surface_variant"]}},
+        {"scope": ["invalid", "invalid.illegal"], "settings": {"foreground": c["on_error_container"], "background": c["error_container"]}},
+        {"scope": ["markup.heading", "markup.bold"], "settings": {"foreground": c["primary_fixed"], "fontStyle": "bold"}},
+        {"scope": ["markup.italic"], "settings": {"foreground": c["secondary"], "fontStyle": "italic"}},
+        {"scope": ["markup.inline.raw", "markup.fenced_code.block"], "settings": {"foreground": t["color10"]}},
+    ]
+
+
+def semantic_rules(c: dict[str, str]) -> dict[str, object]:
+    return {
+        "namespace": c["tertiary"],
+        "type": c["tertiary_fixed_dim"],
+        "class": {"foreground": c["tertiary_fixed_dim"], "bold": True},
+        "interface": c["tertiary_fixed_dim"],
+        "enum": c["primary"],
+        "enumMember": c["tertiary"],
+        "typeParameter": c["secondary"],
+        "function": c["primary_fixed"],
+        "method": c["primary_fixed"],
+        "property": c["on_surface"],
+        "variable": c["on_surface"],
+        "variable.readonly": c["tertiary"],
+        "parameter": c["secondary"],
+        "decorator": c["primary"],
+        "keyword": c["primary"],
+        "string": c["secondary_fixed_dim"],
+        "number": c["tertiary"],
+        "regexp": c["tertiary_fixed"],
+        "operator": c["on_surface_variant"],
+        "comment": {"foreground": c["outline"], "italic": True},
+    }
+
+
+def update_settings() -> bool:
+    colors, terminal = load_colors()
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if SETTINGS_PATH.exists():
+        with SETTINGS_PATH.open(encoding="utf-8") as handle:
+            settings = json.load(handle)
+        mode = stat.S_IMODE(SETTINGS_PATH.stat().st_mode)
+    else:
+        settings = {}
+        mode = 0o600
+
+    settings.update({
+        "workbench.colorTheme": "Default Dark Modern",
+        "workbench.preferredDarkColorTheme": "Default Dark Modern",
+        "window.autoDetectColorScheme": False,
+        "editor.fontFamily": "'JetBrains Mono', 'Noto Color Emoji', monospace",
+        "editor.fontLigatures": True,
+        "terminal.integrated.fontFamily": "JetBrains Mono",
+        "debug.console.fontFamily": "JetBrains Mono",
+        "editor.semanticHighlighting.enabled": True,
+        "editor.bracketPairColorization.enabled": True,
+        "workbench.colorCustomizations": workbench_colors(colors, terminal),
+        "editor.tokenColorCustomizations": {"textMateRules": textmate_rules(colors, terminal)},
+        "editor.semanticTokenColorCustomizations": {"enabled": True, "rules": semantic_rules(colors)},
+    })
+
+    ignored = settings.get("settingsSync.ignoredSettings", [])
+    if not isinstance(ignored, list):
+        ignored = []
+    for key in (
+        "workbench.colorCustomizations",
+        "editor.tokenColorCustomizations",
+        "editor.semanticTokenColorCustomizations",
+    ):
+        if key not in ignored:
+            ignored.append(key)
+    settings["settingsSync.ignoredSettings"] = ignored
+
+    rendered = json.dumps(settings, indent=4, ensure_ascii=False) + "\n"
+    if SETTINGS_PATH.exists() and SETTINGS_PATH.read_text(encoding="utf-8") == rendered:
+        return False
+
+    temporary = SETTINGS_PATH.with_name(SETTINGS_PATH.name + ".ricemood-tmp")
+    temporary.write_text(rendered, encoding="utf-8")
+    os.chmod(temporary, mode)
+    os.replace(temporary, SETTINGS_PATH)
+    return True
+
+
+if __name__ == "__main__":
+    changed = update_settings()
+    print(f"ricemood-vscode: {'updated' if changed else 'already current'}")
