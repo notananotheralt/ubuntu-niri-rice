@@ -6,19 +6,17 @@
 #   ./install.sh             install everything
 #   ./install.sh --dry-run   show what would happen, change nothing
 #   ./install.sh --no-omz    skip installing oh-my-zsh
-#   ./install.sh --no-vscode-theme
-#                            skip the RiceMood VS Code integration
+#   ./install.sh --no-rice   skip desktop/rice files and services
 #
 # What it does:
-#   1. Copies each rc file here into your home directory, e.g.
-#        ~/runtime_components/vimrc  ->  ~/.vimrc
+#   1. Copies the terminal and desktop configuration into your home directory.
 #      These are copies: after editing a file in the repo, run this
 #      script again to install the new version.
 #   2. Copies gitconfig to ~/.gitconfig.rc and tells git to also read it
 #      (your name and email stay in ~/.gitconfig, out of this repository).
-#   3. Installs oh-my-zsh, if zsh is available.
-#   4. Installs the RiceMood VS Code palette generator and its event-driven
-#      systemd watcher, if DankMaterialShell has produced a palette.
+#   3. Enables event-driven RiceMood services for DMS, Obsidian and VS Code.
+#   4. Installs the Firefox chrome files into the active Snap profile.
+#   5. Installs oh-my-zsh, if zsh is available.
 #
 # Safe to run more than once. Nothing is ever deleted: a file already in
 # the way is renamed to  ~/.NAME.backup-DATE-TIME  first.
@@ -27,10 +25,42 @@ set -eu
 
 # Files in this repository that become ~/.NAME. Missing ones are skipped,
 # so add names here as your collection grows.
-FILES=".bashrc .zshrc .vimrc .gdbinit
+SHELL_FILES=".bashrc .zshrc .vimrc .gdbinit"
+
+RICE_FILES=".config/niri/config.kdl
+.config/niri/dms/alttab.kdl
+.config/niri/dms/binds.kdl
+.config/niri/dms/colors.kdl
+.config/niri/dms/cursor.kdl
+.config/niri/dms/input.kdl
+.config/niri/dms/layout.kdl
+.config/niri/dms/outputs.kdl
+.config/niri/dms/windowrules.kdl
+.config/niri/dms/wpblur.kdl
+.config/DankMaterialShell/settings.json
+.config/DankMaterialShell/plugin_settings.json
+.config/DankMaterialShell/plugins/stronglyLivingWeekly/README.md
+.config/DankMaterialShell/plugins/stronglyLivingWeekly/StronglyLivingWeeklyWidget.qml
+.config/DankMaterialShell/plugins/stronglyLivingWeekly/plugin.json
+.config/kitty/kitty.conf
+.config/kitty/dank-tabs.conf
+.config/fontconfig/conf.d/99-jetbrains-mono-everywhere.conf
+.config/kdeglobals
+.config/gtk-3.0/settings.ini
+.config/gtk-4.0/settings.ini
+.config/gtk-4.0/gtk.css
+.config/environment.d/90-dms.conf
+.local/bin/ricemood
+.local/bin/ricemood-obsidian-sync
+.local/bin/ricemood-vivaldi-live
 .local/bin/ricemood-vscode-theme
-.config/systemd/user/ricemood-vscode.path
-.config/systemd/user/ricemood-vscode.service"
+.local/bin/ricemood-wallpaper-sync
+.local/bin/vivaldi-ricemood
+.config/systemd/user/ricemood-obsidian.path
+.config/systemd/user/ricemood-obsidian.service
+.config/systemd/user/ricemood-wallpaper-startup.service
+.config/systemd/user/ricemood-wallpaper.path
+.config/systemd/user/ricemood-wallpaper.service"
 
 OMZ_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
 
@@ -39,12 +69,12 @@ OMZ_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.
 # ---------------------------------------------------------------------------
 DRY_RUN=0
 INSTALL_OMZ=1
-INSTALL_RICEMOOD_VSCODE=1
+INSTALL_RICE=1
 for arg in "$@"; do
     case "$arg" in
         -n|--dry-run) DRY_RUN=1 ;;
         --no-omz)     INSTALL_OMZ=0 ;;
-        --no-vscode-theme) INSTALL_RICEMOOD_VSCODE=0 ;;
+        --no-rice)    INSTALL_RICE=0 ;;
         -h|--help)    sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)            echo "unknown option: $arg  (try --help)" >&2; exit 1 ;;
     esac
@@ -65,53 +95,45 @@ run() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. RiceMood-backed VS Code colors
+# Desktop/rice activation
 # ---------------------------------------------------------------------------
-setup_ricemood_vscode() {
-    if [ "$INSTALL_RICEMOOD_VSCODE" -eq 0 ]; then
-        echo "skip      RiceMood VS Code theme (--no-vscode-theme)"
-        return
-    fi
-
-    local helper="$HOME/.local/bin/ricemood-vscode-theme"
-    if [ "$DRY_RUN" -eq 0 ]; then
-        chmod 0755 "$helper"
-    else
-        echo "          would make $helper executable"
-    fi
-
+setup_rice() {
     if [ -r "$HOME/.cache/DankMaterialShell/dms-colors.json" ]; then
-        echo "theme     VS Code from the current RiceMood palette"
-        run "$helper"
+        echo "theme     applications from the current RiceMood palette"
+        run "$HOME/.local/bin/ricemood-vscode-theme"
+        run "$HOME/.local/bin/ricemood-obsidian-sync"
     else
-        echo "wait      VS Code theme (DankMaterialShell palette not generated yet)"
-        echo "          The watcher will apply it after the next palette change."
+        echo "wait      application themes (DMS palette not generated yet)"
+        echo "          The path units will apply them after the next palette change."
     fi
 
     if command -v systemctl >/dev/null 2>&1; then
-        echo "enable    ricemood-vscode.path"
+        echo "enable    event-driven RiceMood services"
         run systemctl --user daemon-reload
-        run systemctl --user enable --now ricemood-vscode.path
+        run systemctl --user enable --now \
+            ricemood-wallpaper.path \
+            ricemood-wallpaper-startup.service \
+            ricemood-obsidian.path
     else
-        echo "skip      live VS Code updates (systemd is unavailable)"
+        echo "skip      live palette updates (systemd is unavailable)"
     fi
 }
 
 # ---------------------------------------------------------------------------
 # 1. Copy rc files
 # ---------------------------------------------------------------------------
-install_file() {
+install_path() {
     local src="$REPO_DIR/$1"
-    local dest="$HOME/$1"
+    local dest="$HOME/$2"
 
     if [ ! -e "$src" ]; then
-        echo "skip      .$1  (no $1 in this repo)"
+        echo "skip      $1  (not in this repo)"
         return
     fi
 
     # Already an identical copy: nothing to do.
     if [ -f "$dest" ] && [ ! -L "$dest" ] && cmp -s "$src" "$dest"; then
-        echo "ok        .$1"
+        echo "ok        ~/$2"
         return
     fi
 
@@ -121,12 +143,39 @@ install_file() {
         while [ -e "$bak" ] || [ -L "$bak" ]; do   # never overwrite a backup
             bak="$dest.backup-$STAMP-$n"; n=$((n + 1))
         done
-        echo "backup    .$1  ->  ${bak##*/}"
+        echo "backup    ~/$2  ->  ${bak##*/}"
         run mv "$dest" "$bak"
     fi
 
-    echo "copy      $1  ->  ~/$1"
+    run mkdir -p "$(dirname "$dest")"
+    echo "copy      $1  ->  ~/$2"
     run cp "$src" "$dest"
+}
+
+install_file() {
+    install_path "$1" "$1"
+}
+
+setup_firefox() {
+    local profile_root="$HOME/snap/firefox/common/.mozilla/firefox"
+    local profile=""
+    if [ -d "$profile_root" ]; then
+        profile="$(find "$profile_root" -mindepth 1 -maxdepth 1 -type d -name '*.default*' -print -quit)"
+    fi
+    if [ -z "$profile" ]; then
+        echo "skip      Firefox chrome (no Snap profile found)"
+        return
+    fi
+    install_path "apps/firefox/userChrome.css" "${profile#$HOME/}/chrome/userChrome.css"
+    install_path "apps/firefox/userContent.css" "${profile#$HOME/}/chrome/userContent.css"
+}
+
+setup_wallpapers() {
+    local wallpaper
+    for wallpaper in "$REPO_DIR"/wallpapers/*; do
+        [ -f "$wallpaper" ] || continue
+        install_path "wallpapers/${wallpaper##*/}" "Pictures/wallpapers/${wallpaper##*/}"
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -221,13 +270,22 @@ echo "Installing from $REPO_DIR"
 [ "$DRY_RUN" -eq 1 ] && echo "(dry run: nothing will be changed)"
 echo
 
-for f in $FILES; do
+for f in $SHELL_FILES; do
     install_file "$f"
 done
 
-setup_gitconfig
+if [ "$INSTALL_RICE" -eq 1 ]; then
+    for f in $RICE_FILES; do
+        install_file "$f"
+    done
+    setup_firefox
+    setup_wallpapers
+    setup_rice
+else
+    echo "skip      desktop rice (--no-rice)"
+fi
 
-setup_ricemood_vscode
+setup_gitconfig
 
 if [ "$INSTALL_OMZ" -eq 1 ]; then
     install_omz

@@ -1,0 +1,26 @@
+# Runtime and generated state
+**/__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.swp
+*~
+
+# Local backups and browser/profile data must never be published
+**/backups/
+**/*.backup-*
+**/storage/
+**/Session Storage/
+**/Local Storage/
+**/Cookies
+**/Login Data
+**/Preferences
+
+# DMS/Matugen regenerates these for the active wallpaper
+.cache/
+.local/state/
+.config/DankMaterialShell/firefox.css
+.config/kitty/dank-theme.conf
+.config/alacritty/dank-theme.toml
+.config/gtk-3.0/dank-colors.css
+.config/gtk-4.0/dank-colors.css

@@ -1,0 +1,9 @@
+[General]
+font=JetBrains Mono,11,-1,5,50,0,0,0,0,0
+fixed=JetBrains Mono,11,-1,5,50,0,0,0,0,0
+menuFont=JetBrains Mono,11,-1,5,50,0,0,0,0,0
+smallestReadableFont=JetBrains Mono,9,-1,5,50,0,0,0,0,0
+toolBarFont=JetBrains Mono,10,-1,5,50,0,0,0,0,0
+
+[Icons]
+Theme=Colloid-Orange-Dark

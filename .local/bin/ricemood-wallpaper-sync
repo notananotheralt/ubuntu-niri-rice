@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly STATE_DIR="${HOME}/.cache/ricemood"
+readonly SESSION_FILE="${HOME}/.local/state/DankMaterialShell/session.json"
+readonly SETTINGS_FILE="${HOME}/.config/DankMaterialShell/settings.json"
+readonly DMS_STATE_DIR="${HOME}/.cache/DankMaterialShell"
+readonly DMS_SHELL_DIR="/usr/share/quickshell/dms/quickshell"
+readonly DMS_CONFIG_DIR="${HOME}/.config"
+readonly RICEMOOD="${HOME}/.local/bin/ricemood"
+readonly FIREFOX_PROFILE="${HOME}/snap/firefox/common/.mozilla/firefox/699erz83.default"
+readonly SHELL_THEME_DIR="${HOME}/.config/shell"
+readonly VIVALDI_CSS_DIR="${HOME}/snap/vivaldi/common/ricemood-ui"
+
+mkdir -p "$STATE_DIR"
+exec 9>"$STATE_DIR/sync.lock"
+flock -w 30 9
+
+force=false
+if [[ "${1:-}" == "--force" ]]; then
+  force=true
+else
+  # Let DMS finish its own wallpaper transition before Ricemood applies the
+  # final accent. This also avoids competing Matugen jobs.
+  sleep 2
+fi
+
+wallpaper=""
+for _ in {1..30}; do
+  # DMS starts asynchronously. Its CLI can print "Target not found." before
+  # the shell registers its IPC target; that is not a wallpaper filename.
+  candidate="$(timeout 2s dms ipc call wallpaper get 2>/dev/null | tail -n 1 | tr -d '\r')" || candidate=""
+  if [[ -f "$candidate" || "$candidate" =~ ^#[[:xdigit:]]{6}$ ]]; then
+    wallpaper="$candidate"
+    break
+  fi
+  sleep 1
+done
+
+if [[ -z "$wallpaper" ]]; then
+  # Do not regenerate from stale session state while DMS is still unavailable.
+  # The existing session-file path watcher retries on the next DMS state update.
+  printf 'ricemood-sync: DMS wallpaper not ready; keeping the existing palette\n' >&2
+  exit 0
+fi
+
+mode="$(python3 - "$SESSION_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    print("light" if json.load(handle).get("isLightMode", False) else "dark")
+PY
+)"
+
+scheme="$(python3 - "$SETTINGS_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    print(json.load(handle).get("matugenScheme", "scheme-tonal-spot"))
+PY
+)"
+
+if [[ "$wallpaper" == \#* ]]; then
+  fingerprint="color:$wallpaper:$mode:$scheme"
+else
+  if [[ ! -f "$wallpaper" ]]; then
+    printf 'ricemood-sync: wallpaper does not exist: %s\n' "$wallpaper" >&2
+    exit 1
+  fi
+  fingerprint="$(sha256sum "$wallpaper" | awk '{print $1}'):$mode:$scheme"
+fi
+
+if [[ "$force" != true && -r "$STATE_DIR/current.fingerprint" ]]; then
+  previous="$(<"$STATE_DIR/current.fingerprint")"
+  if [[ "$previous" == "$fingerprint" ]]; then
+    printf 'ricemood-sync: wallpaper palette is already current\n'
+    exit 0
+  fi
+fi
+
+palette_tmp="$(mktemp "$STATE_DIR/palette.XXXXXX.json")"
+cleanup() {
+  rm -f "$palette_tmp"
+}
+trap cleanup EXIT
+
+if [[ "$wallpaper" == \#* ]]; then
+  accent="$wallpaper"
+  python3 - "$palette_tmp" "$accent" <<'PY'
+import json
+import sys
+
+target, color = sys.argv[1:]
+rgb = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+with open(target, "w", encoding="utf-8") as handle:
+    json.dump([[['V', 'Vibrant'], rgb]], handle, indent=2)
+    handle.write("\n")
+PY
+else
+  "$RICEMOOD" --image "$wallpaper" >"$palette_tmp"
+  accent="$(python3 - "$palette_tmp" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    swatches = json.load(handle)
+
+preferred = ("Vibrant", "LightVibrant", "DarkVibrant", "Muted")
+by_name = {}
+for aliases, rgb in swatches:
+    for alias in aliases:
+        by_name[alias] = rgb
+
+for name in preferred:
+    if name in by_name:
+        print("#" + "".join(f"{channel:02X}" for channel in by_name[name]))
+        break
+else:
+    raise SystemExit("Ricemood returned no usable color swatch")
+PY
+)"
+fi
+
+# Snap applications can only consume published content-theme names. Choose the
+# closest Colloid family bundled by icon-theme-colloid so native and confined
+# apps use the same wallpaper-coordinated icon set without install prompts.
+icon_theme="$(python3 - "$accent" "$mode" <<'PY'
+import colorsys
+import sys
+
+accent, mode = sys.argv[1:]
+
+
+def rgb(value):
+    value = value.lstrip("#")
+    return tuple(int(value[index:index + 2], 16) / 255 for index in (0, 2, 4))
+
+
+candidates = {
+    "": "#5B9BF8",
+    "Purple": "#BA68C8",
+    "Pink": "#F06292",
+    "Red": "#F44336",
+    "Orange": "#FB8C00",
+    "Yellow": "#FFD600",
+    "Green": "#66BB6A",
+    "Teal": "#4DB6AC",
+    "Grey": "#888888",
+}
+
+accent_hsv = colorsys.rgb_to_hsv(*rgb(accent))
+if accent_hsv[1] < 0.16:
+    family = "Grey"
+else:
+    def distance(candidate):
+        candidate_hsv = colorsys.rgb_to_hsv(*rgb(candidate))
+        hue = abs(accent_hsv[0] - candidate_hsv[0])
+        hue = min(hue, 1 - hue)
+        return (hue * 4) ** 2 + (accent_hsv[1] - candidate_hsv[1]) ** 2
+
+    family = min(candidates, key=lambda name: distance(candidates[name]))
+
+suffix = "Light" if mode == "light" else "Dark"
+prefix = "Colloid" if not family else f"Colloid-{family}"
+print(f"{prefix}-{suffix}")
+PY
+)"
+
+if [[ ! -d "${HOME}/.local/share/icons/$icon_theme" ]]; then
+  printf 'ricemood-sync: expected icon theme is missing: %s\n' "$icon_theme" >&2
+  exit 1
+fi
+
+# Mark DMS as a dynamic theme so its shell reads the generated color file.
+dms ipc call settings set currentThemeCategory dynamic >/dev/null
+dms ipc call settings set currentThemeName dynamic >/dev/null
+
+# Ricemood chooses the accent; DMS/Matugen expands it into accessible GTK,
+# Qt, terminal, Firefox and Niri palettes.
+dms matugen queue \
+  --state-dir "$DMS_STATE_DIR" \
+  --shell-dir "$DMS_SHELL_DIR" \
+  --config-dir "$DMS_CONFIG_DIR" \
+  --kind hex \
+  --value "$accent" \
+  --mode "$mode" \
+  --icon-theme "$icon_theme" \
+  --matugen-type "$scheme" \
+  --run-user-templates \
+  --sync-mode-with-portal \
+  --wait
+
+# DMS regenerates this stylesheet on every palette change. Keep the user's
+# JetBrains Mono preference while retaining the newly generated colors.
+python3 - "${HOME}/.config/DankMaterialShell/firefox.css" <<'PY'
+import os
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    content = handle.read()
+content = re.sub(
+    r'(?m)^\s*font-family:.*!important;$',
+    '  font-family: "JetBrains Mono", system-ui, sans-serif, "Noto Color Emoji" !important;',
+    content,
+)
+temporary = path + ".tmp"
+with open(temporary, "w", encoding="utf-8") as handle:
+    handle.write(content)
+os.replace(temporary, path)
+PY
+
+# Keep the remaining visual surfaces on the same palette: a compact Bash
+# prompt, Firefox chrome, Vivaldi chrome, and wallpaper-matched Colloid icons.
+install -d -m 0755 \
+  "$SHELL_THEME_DIR" \
+  "$FIREFOX_PROFILE/chrome" \
+  "$VIVALDI_CSS_DIR"
+
+python3 - \
+  "$DMS_STATE_DIR/dms-colors.json" \
+  "$mode" \
+  "$SHELL_THEME_DIR/ricemood-prompt.sh" \
+  "${HOME}/.config/DankMaterialShell/firefox.css" \
+  "$FIREFOX_PROFILE/chrome/dms-colors.css" \
+  "$VIVALDI_CSS_DIR/vivaldi.css" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+(
+    colors_path,
+    mode,
+    shell_path,
+    firefox_source,
+    firefox_target,
+    vivaldi_target,
+) = sys.argv[1:]
+
+with open(colors_path, encoding="utf-8") as handle:
+    data = json.load(handle)
+colors = data["colors"][mode]
+
+
+def atomic_write(path, content):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def rgb_triplet(color):
+    color = color.lstrip("#")
+    return ";".join(str(int(color[index:index + 2], 16)) for index in (0, 2, 4))
+
+
+primary_rgb = rgb_triplet(colors["primary"])
+secondary_rgb = rgb_triplet(colors["secondary"])
+tertiary_rgb = rgb_triplet(colors["tertiary"])
+surface_text_rgb = rgb_triplet(colors["on_surface"])
+
+shell = f'''# Generated by ricemood-wallpaper-sync. Local edits will be replaced.
+PROMPT_DIRTRIM=3
+PS1='\\[\\e[38;2;{primary_rgb}m\\]\\u\\[\\e[38;2;{surface_text_rgb}m\\]  \\w  \\[\\e[38;2;{primary_rgb}m\\]❯\\[\\e[0m\\] '
+export LS_COLORS="${{LS_COLORS:+$LS_COLORS:}}di=01;38;2;{primary_rgb}:ln=38;2;{tertiary_rgb}:ex=01;38;2;{secondary_rgb}:or=01;38;2;{tertiary_rgb}:mi=01;38;2;{tertiary_rgb}"
+'''
+atomic_write(shell_path, shell)
+
+with open(firefox_source, encoding="utf-8") as handle:
+    atomic_write(firefox_target, handle.read())
+
+css = f'''/* Generated by ricemood-wallpaper-sync. Local edits will be replaced. */
+#browser {{
+  --colorFg: {colors['on_surface']} !important;
+  --colorFgIntense: {colors['on_surface']} !important;
+  --colorFgFaded: {colors['on_surface_variant']} !important;
+  --colorFgFadedMore: {colors['outline']} !important;
+  --colorFgFadedMost: {colors['outline_variant']} !important;
+  --colorBg: {colors['surface_container']} !important;
+  --colorBgAlpha: color-mix(in srgb, {colors['surface_container']} 90%, transparent) !important;
+  --colorBgAlphaHeavy: color-mix(in srgb, {colors['surface_container']} 66%, transparent) !important;
+  --colorBgAlphaHeavier: color-mix(in srgb, {colors['surface_container']} 28%, transparent) !important;
+  --colorBgAlphaBlur: {colors['surface']} !important;
+  --colorBgDark: {colors['surface']} !important;
+  --colorBgDarker: {colors['surface_container_lowest']} !important;
+  --colorBgLight: {colors['surface_container_high']} !important;
+  --colorBgLighter: {colors['surface_container_highest']} !important;
+  --colorBgIntense: {colors['surface_container_high']} !important;
+  --colorBgIntenser: {colors['surface_container_highest']} !important;
+  --colorHighlightBg: {colors['primary']} !important;
+  --colorHighlightBgFaded: {colors['primary_fixed_dim']} !important;
+  --colorHighlightFg: {colors['on_primary']} !important;
+  --colorAccentBg: {colors['surface']} !important;
+  --colorAccentBgAlpha: color-mix(in srgb, {colors['surface']} 56%, transparent) !important;
+  --colorAccentBgAlphaHeavy: color-mix(in srgb, {colors['surface']} 38%, transparent) !important;
+  --colorAccentBgDark: {colors['surface_container_low']} !important;
+  --colorAccentBgDarker: {colors['surface_container_lowest']} !important;
+  --colorAccentBgFaded: {colors['surface_dim']} !important;
+  --colorAccentBgFadedMore: {colors['surface_container_low']} !important;
+  --colorAccentBgFadedMost: {colors['surface_container_lowest']} !important;
+  --colorAccentBorder: {colors['outline_variant']} !important;
+  --colorAccentFg: {colors['on_surface']} !important;
+  --colorAccentFgFaded: {colors['on_surface_variant']} !important;
+  --colorBorder: {colors['outline']} !important;
+  --colorBorderSubtle: {colors['outline_variant']} !important;
+  --colorBorderIntense: {colors['outline']} !important;
+  --colorErrorBg: {colors['error_container']} !important;
+  --colorErrorFg: {colors['on_error']} !important;
+  --colorWindowBg: {colors['surface']} !important;
+  --colorWindowFg: {colors['on_surface']} !important;
+  background-color: {colors['surface']} !important;
+  background-image: none !important;
+  font-family: "JetBrains Mono", system-ui, sans-serif, "Noto Color Emoji" !important;
+}}
+
+#browser button,
+#browser input,
+#browser textarea,
+#browser select {{
+  font-family: inherit !important;
+}}
+
+.vivaldi-settings,
+.settings-content,
+.settings-sidebar,
+.startpage,
+.webpageview {{
+  background-color: {colors['surface']} !important;
+}}
+
+.UrlBar-AddressField,
+.SearchField,
+.tab-position .tab {{
+  border-radius: 10px !important;
+}}
+
+.tab-position .tab {{
+  background-color: color-mix(in srgb, {colors['surface_container_high']} 48%, transparent) !important;
+}}
+
+.tab-position .tab.active {{
+  background-color: {colors['surface_container_high']} !important;
+  outline: 1px solid color-mix(in srgb, {colors['primary']} 58%, transparent) !important;
+  outline-offset: -1px !important;
+}}
+
+* {{
+  scrollbar-color: {colors['primary']} {colors['surface_container']} !important;
+}}
+'''
+atomic_write(vivaldi_target, css)
+PY
+
+# Refresh only currently open Vivaldi windows. The helper exits immediately
+# when Vivaldi is closed; there is no background polling process.
+${HOME}/.local/bin/ricemood-vivaldi-live || true
+
+# VS Code watches its user settings and applies these generated semantic colors
+# to already-open windows, so wallpaper changes need no polling or restart.
+${HOME}/.local/bin/ricemood-vscode-theme || \
+  printf 'ricemood-sync: could not update VS Code colors\n' >&2
+
+gsettings set org.gnome.desktop.interface icon-theme "$icon_theme"
+dms ipc call settings set iconThemeDark "$icon_theme" >/dev/null
+dms ipc call settings set iconThemeLight "$icon_theme" >/dev/null
+dms ipc call settings set iconThemePerMode false >/dev/null
+
+# Matugen owns the colors in these generated toolkit files, while this script
+# owns their icon selection. Keep every native toolkit on the same published
+# theme name that Snap applications can consume.
+python3 - "$icon_theme" \
+  "${HOME}/.config/gtk-3.0/settings.ini:gtk-icon-theme-name" \
+  "${HOME}/.config/gtk-4.0/settings.ini:gtk-icon-theme-name" \
+  "${HOME}/.config/qt5ct/qt5ct.conf:icon_theme" \
+  "${HOME}/.config/qt6ct/qt6ct.conf:icon_theme" \
+  "${HOME}/.config/kdeglobals:Theme" <<'PY'
+import os
+from pathlib import Path
+import re
+import sys
+
+theme = sys.argv[1]
+for spec in sys.argv[2:]:
+    raw_path, key = spec.rsplit(":", 1)
+    path = Path(raw_path)
+    if not path.exists():
+        continue
+
+    content = path.read_text(encoding="utf-8")
+    updated, replacements = re.subn(
+        rf"(?m)^{re.escape(key)}=.*$",
+        f"{key}={theme}",
+        content,
+        count=1,
+    )
+    if replacements == 0 or updated == content:
+        continue
+
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(updated, encoding="utf-8")
+    os.replace(temporary, path)
+PY
+
+# Ptyxis is not one of DMS's built-in Matugen targets. Generate its native
+# palette format from the same DMS colors and select it for the default profile.
+install -d -m 0755 ${HOME}/.local/share/org.gnome.Ptyxis/palettes
+python3 - \
+  "$DMS_STATE_DIR/dms-colors.json" \
+  "${HOME}/.local/share/org.gnome.Ptyxis/palettes/dms-wallpaper.palette" <<'PY'
+import json
+import os
+import sys
+
+source, target = sys.argv[1:]
+with open(source, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+lines = ["[Palette]", "Name=DMS Wallpaper", "Primary=true", "UseSystemAccent=true", ""]
+for label, mode in (("Light", "light"), ("Dark", "dark")):
+    colors = data["colors"][mode]
+    lines.extend([
+        f"[{label}]",
+        f"Foreground={colors['on_surface']}",
+        f"Background={colors['surface']}",
+        f"Cursor={colors['primary']}",
+        f"TitlebarForeground={colors['on_surface']}",
+        f"TitlebarBackground={colors['surface_container']}",
+    ])
+    for index in range(16):
+        lines.append(f"Color{index}={data['dank16'][f'color{index}'][mode]}")
+    lines.append("")
+
+temporary = target + ".tmp"
+with open(temporary, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines))
+os.replace(temporary, target)
+PY
+
+ptyxis_profile="$(gsettings get org.gnome.Ptyxis default-profile-uuid 2>/dev/null | tr -d "'" || true)"
+if [[ -n "$ptyxis_profile" ]]; then
+  ptyxis_schema="org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/$ptyxis_profile/"
+  gsettings set "$ptyxis_schema" palette 'dms-wallpaper'
+  gsettings set "$ptyxis_schema" opacity 1.0
+fi
+
+mv -f "$palette_tmp" "$STATE_DIR/current-palette.json"
+trap - EXIT
+printf '%s\n' "$fingerprint" >"$STATE_DIR/current.fingerprint"
+
+RICEMOOD_WALLPAPER="$wallpaper" RICEMOOD_ACCENT="$accent" RICEMOOD_MODE="$mode" RICEMOOD_SCHEME="$scheme" RICEMOOD_ICON_THEME="$icon_theme" \
+python3 - "$STATE_DIR/current.json" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+target = sys.argv[1]
+data = {
+    "wallpaper": os.environ["RICEMOOD_WALLPAPER"],
+    "accent": os.environ["RICEMOOD_ACCENT"],
+    "mode": os.environ["RICEMOOD_MODE"],
+    "scheme": os.environ["RICEMOOD_SCHEME"],
+    "icon_theme": os.environ["RICEMOOD_ICON_THEME"],
+    "updated_at": datetime.now(timezone.utc).isoformat(),
+}
+temporary = target + ".tmp"
+with open(temporary, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+os.replace(temporary, target)
+PY
+
+printf 'ricemood-sync: %s -> %s (%s, %s, %s)\n' "$wallpaper" "$accent" "$mode" "$scheme" "$icon_theme"

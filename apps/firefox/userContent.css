@@ -1,0 +1,24 @@
+@import url("dms-colors.css");
+
+/* Style browser-owned pages only; ordinary websites keep their own design. */
+@-moz-document url-prefix("about:"),
+               url-prefix("chrome://browser/"),
+               url-prefix("resource://pdf.js/") {
+  :root,
+  body {
+    background-color: var(--md-sys-color-surface) !important;
+    color: var(--md-sys-color-on-surface) !important;
+    font-family: "JetBrains Mono", system-ui, sans-serif, "Noto Color Emoji" !important;
+  }
+
+  a,
+  button,
+  input:focus {
+    accent-color: var(--md-sys-color-primary) !important;
+  }
+
+  ::selection {
+    background: var(--md-sys-color-primary) !important;
+    color: var(--md-sys-color-on-primary) !important;
+  }
+}

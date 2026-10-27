@@ -1,0 +1,11 @@
+[Unit]
+Description=Reapply the Ricemood wallpaper palette after DMS starts
+After=graphical-session.target dms.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 5
+ExecStart=%h/.local/bin/ricemood-wallpaper-sync --force
+
+[Install]
+WantedBy=default.target

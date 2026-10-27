@@ -1,0 +1,173 @@
+{
+  "currentThemeName": "dynamic",
+  "currentThemeCategory": "dynamic",
+  "popupTransparency": 0.9,
+  "dockTransparency": 0.9,
+  "widgetColorMode": "colorful",
+  "cornerRadius": 12,
+  "niriLayoutGapsOverride": 6,
+  "niriLayoutRadiusOverride": 12,
+  "niriLayoutBorderSize": 2,
+  "calendarBackend": "khal",
+  "clockFormat": "12h",
+  "m3ElevationIntensity": 17,
+  "m3ElevationOpacity": 49,
+  "blurEnabled": true,
+  "systemTrayIconTintSaturation": 62,
+  "controlCenterShowMicPercent": true,
+  "appsDockColorizeActive": true,
+  "appsDockEnlargeOnHover": true,
+  "appIdSubstitutions": [],
+  "centeringMode": "geometric",
+  "greeterFontFamily": "JetBrains Mono",
+  "networkPreference": "wifi",
+  "iconThemeDark": "Colloid-Orange-Dark",
+  "iconThemeLight": "Colloid-Orange-Dark",
+  "cursorSettings": {
+    "theme": "System Default",
+    "size": 24,
+    "niri": {
+      "hideWhenTyping": false,
+      "hideAfterInactiveMs": 0
+    },
+    "hyprland": {
+      "hideOnKeyPress": false,
+      "hideOnTouch": false,
+      "inactiveTimeout": 0
+    },
+    "mango": {
+      "cursorHideTimeout": 0
+    }
+  },
+  "fontFamily": "JetBrains Mono",
+  "monoFontFamily": "JetBrains Mono",
+  "notepadFontFamily": "JetBrains Mono",
+  "lockBeforeSuspend": true,
+  "terminalsAlwaysDark": true,
+  "lockScreenFontFamily": "JetBrains Mono",
+  "osdPowerProfileEnabled": true,
+  "barConfigs": [
+    {
+      "id": "default",
+      "name": "Main Bar",
+      "enabled": true,
+      "position": 0,
+      "screenPreferences": [
+        "all"
+      ],
+      "showOnLastDisplay": true,
+      "leftWidgets": [
+        "launcherButton",
+        {
+          "id": "appsDock",
+          "enabled": true,
+          "barMaxVisibleApps": 4,
+          "barMaxVisibleRunningApps": 2
+        },
+        "stronglyLivingWeekly"
+      ],
+      "centerWidgets": [
+        "clock",
+        "weather",
+        "music"
+      ],
+      "rightWidgets": [
+        {
+          "id": "workspaceSwitcher",
+          "enabled": true
+        },
+        {
+          "id": "systemTray",
+          "enabled": false
+        },
+        {
+          "id": "clipboard",
+          "enabled": false
+        },
+        "notificationButton",
+        "battery",
+        "controlCenterButton"
+      ],
+      "spacing": 4,
+      "innerPadding": 4,
+      "barInsetPadding": 4,
+      "bottomGap": 0,
+      "transparency": 0.62,
+      "widgetTransparency": 0.3,
+      "squareCorners": false,
+      "noBackground": false,
+      "maximizeWidgetIcons": false,
+      "maximizeWidgetText": false,
+      "removeWidgetPadding": false,
+      "widgetPadding": 8,
+      "gothCornersEnabled": false,
+      "gothCornerRadiusOverride": true,
+      "gothCornerRadiusValue": 52,
+      "borderEnabled": false,
+      "borderColor": "surfaceText",
+      "borderOpacity": 1,
+      "borderThickness": 1,
+      "widgetOutlineEnabled": false,
+      "widgetOutlineColor": "primary",
+      "widgetOutlineOpacity": 1,
+      "widgetOutlineThickness": 1,
+      "fontScale": 1,
+      "iconScale": 1,
+      "autoHide": false,
+      "autoHideStrict": false,
+      "autoHideDelay": 250,
+      "showOnWindowsOpen": false,
+      "openOnOverview": false,
+      "visible": true,
+      "popupGapsAuto": true,
+      "popupGapsManual": 4,
+      "maximizeDetection": true,
+      "useOverlayLayer": false,
+      "scrollEnabled": true,
+      "scrollXBehavior": "column",
+      "scrollYBehavior": "workspace",
+      "shadowIntensity": 0,
+      "shadowOpacity": 60,
+      "shadowColorMode": "default",
+      "shadowCustomColor": "#000000",
+      "clickThrough": false,
+      "hoverPopouts": false,
+      "hoverPopoutDelay": 150
+    }
+  ],
+  "desktopClockCustomColor": {
+    "r": 1,
+    "g": 1,
+    "b": 1,
+    "a": 1,
+    "hsvHue": -1,
+    "hsvSaturation": 0,
+    "hsvValue": 1,
+    "hslHue": -1,
+    "hslSaturation": 0,
+    "hslLightness": 1,
+    "valid": true
+  },
+  "systemMonitorCustomColor": {
+    "r": 1,
+    "g": 1,
+    "b": 1,
+    "a": 1,
+    "hsvHue": -1,
+    "hsvSaturation": 0,
+    "hsvValue": 1,
+    "hslHue": -1,
+    "hslSaturation": 0,
+    "hslLightness": 1,
+    "valid": true
+  },
+  "builtInPluginSettings": {
+    "dms_settings_search": {
+      "trigger": "?"
+    },
+    "dms_clipboard_search": {
+      "trigger": "cb"
+    }
+  },
+  "configVersion": 18
+}

@@ -1,0 +1,128 @@
+#!/usr/bin/node
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+// Chromium may bind a loopback-only debugging address as either IPv4 or IPv6.
+// Vivaldi's Snap currently chooses ::1 even when launched with an IPv4 address,
+// so try both instead of accidentally talking to a different local process.
+const endpoints = [
+  "http://[::1]:9229/json/list",
+  "http://127.0.0.1:9229/json/list",
+];
+const cssPath = path.join(
+  os.homedir(),
+  "snap/vivaldi/common/ricemood-ui/vivaldi.css",
+);
+const waitForBrowser = process.argv.includes("--wait");
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function targets() {
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        signal: AbortSignal.timeout(600),
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const matches = (await response.json()).filter(
+        (target) =>
+          target.type === "app" &&
+          target.url ===
+            "chrome-extension://mpognobbkildjkofajifpdfhcoklimli/window.html" &&
+          target.webSocketDebuggerUrl,
+      );
+      if (matches.length > 0) {
+        return matches;
+      }
+    } catch (_error) {
+      // This address family is not the one used by the running browser.
+    }
+  }
+  return [];
+}
+
+async function findTargets() {
+  const attempts = waitForBrowser ? 50 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const result = await targets();
+      if (result.length > 0) {
+        return result;
+      }
+    } catch (_error) {
+      // Vivaldi is closed or is still creating its browser UI.
+    }
+    if (attempt + 1 < attempts) {
+      await delay(200);
+    }
+  }
+  return [];
+}
+
+function inject(target, css) {
+  return new Promise((resolve) => {
+    const socket = new WebSocket(target.webSocketDebuggerUrl);
+    const timeout = setTimeout(() => {
+      socket.close();
+      resolve(false);
+    }, 1500);
+
+    socket.addEventListener("open", () => {
+      const expression = `(() => {
+        let style = document.getElementById("ricemood-live-palette");
+        if (!style) {
+          style = document.createElement("style");
+          style.id = "ricemood-live-palette";
+          document.head.appendChild(style);
+        }
+        style.textContent = ${JSON.stringify(css)};
+        return true;
+      })()`;
+      socket.send(JSON.stringify({
+        id: 1,
+        method: "Runtime.evaluate",
+        params: { expression, returnByValue: true },
+      }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      if (message.id !== 1) {
+        return;
+      }
+      clearTimeout(timeout);
+      socket.close();
+      resolve(message.result?.result?.value === true);
+    });
+
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      resolve(false);
+    });
+  });
+}
+
+async function main() {
+  if (!fs.existsSync(cssPath)) {
+    return;
+  }
+  const css = fs.readFileSync(cssPath, "utf8");
+  const browserTargets = await findTargets();
+  const results = await Promise.all(
+    browserTargets.map((target) => inject(target, css)),
+  );
+  if (results.some((injected) => !injected)) {
+    throw new Error("Vivaldi rejected the live stylesheet update");
+  }
+}
+
+main().catch((error) => {
+  console.error(`ricemood-vivaldi-live: ${error.message}`);
+  process.exitCode = 1;
+});

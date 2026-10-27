@@ -1,0 +1,8 @@
+[Unit]
+Description=Apply the current DMS wallpaper palette through Ricemood
+After=graphical-session.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/ricemood-wallpaper-sync

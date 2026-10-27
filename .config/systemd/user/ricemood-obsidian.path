@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch Ricemood palette and mode changes for Obsidian
+
+[Path]
+PathChanged=%h/.cache/DankMaterialShell/dms-colors.json
+PathChanged=%h/.local/state/DankMaterialShell/session.json
+Unit=ricemood-obsidian.service
+
+[Install]
+WantedBy=default.target

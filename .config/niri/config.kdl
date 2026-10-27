@@ -1,0 +1,332 @@
+// Derek's Niri laptop session.
+// Hyprland remains installed and uses its separate ~/.config/hypr configuration.
+
+input {
+    mod-key "Super"
+
+    keyboard {
+        xkb {
+            layout "us,us"
+            variant ",dvorak"
+        }
+        numlock
+    }
+
+    touchpad {
+        tap
+        dwt
+        natural-scroll
+    }
+
+    mouse { }
+    trackpoint { }
+}
+
+// ThinkPad internal panel: 1920x1200 physical, 1280x800 logical.
+// The refresh rate is deliberately omitted so Niri selects the best available mode.
+output "eDP-1" {
+    mode "1920x1200"
+    scale 1.5
+    transform "normal"
+}
+
+layout {
+    gaps 6
+    center-focused-column "on-overflow"
+
+    // Comfortable laptop sizes: two equal windows, a wide main window, or one full-width window.
+    preset-column-widths {
+        proportion 0.5
+        proportion 0.66667
+        proportion 1.0
+    }
+    default-column-width { proportion 0.66667; }
+
+    focus-ring {
+        width 2
+        active-color "#42a5f5"
+        inactive-color "#8c9199"
+        urgent-color "#f2b8b5"
+    }
+
+    border {
+        off
+        width 2
+        active-color "#42a5f5"
+        inactive-color "#8c9199"
+        urgent-color "#f2b8b5"
+    }
+
+    shadow {
+        on
+        softness 24
+        spread 2
+        offset x=0 y=4
+        color "#00000070"
+    }
+}
+
+// DMS remains the desktop shell: bar, launcher, wallpaper, notifications and lock screen.
+spawn-at-startup "dms" "run"
+
+environment {
+    XDG_CURRENT_DESKTOP "niri"
+    QT_QPA_PLATFORM "wayland"
+    ELECTRON_OZONE_PLATFORM_HINT "auto"
+    QT_QPA_PLATFORMTHEME "gtk3"
+    QT_QPA_PLATFORMTHEME_QT6 "gtk3"
+}
+
+// Standard-size cursor; DMS can override this later if changed in Settings.
+cursor {
+    xcursor-size 24
+}
+
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+// Niri 26.04 blur. Xray blur remains the efficient default.
+blur {
+    passes 3
+    offset 3
+    noise 0.02
+    saturation 1.5
+}
+
+animations { }
+
+// Make the DMS wallpaper available behind Niri's Overview.
+layer-rule {
+    match namespace="^quickshell$"
+    place-within-backdrop true
+}
+
+layer-rule {
+    match namespace="^dms:blurwallpaper$"
+    place-within-backdrop true
+}
+
+// Rounded tiled windows; DMS will keep these values synchronized with its settings.
+window-rule {
+    geometry-corner-radius 12
+    clip-to-geometry true
+    tiled-state true
+    draw-border-with-background false
+
+    // One mild, consistent glass policy for every application window.
+    opacity 0.94
+
+    background-effect {
+        xray true
+        blur true
+    }
+
+    popups {
+        geometry-corner-radius 12
+
+        background-effect {
+            xray true
+            blur true
+        }
+    }
+}
+
+// Small utility windows float; normal applications remain in the scrolling layout.
+window-rule {
+    match app-id=r#"^org\.gnome\.Calculator$"#
+    match app-id=r#"^gnome-calculator$"#
+    match app-id=r#"^galculator$"#
+    match app-id=r#"^blueman-manager$"#
+    match app-id=r#"^nm-connection-editor$"#
+    match app-id=r#"^pavucontrol$"#
+    match app-id=r#"^xdg-desktop-portal"#
+    open-floating true
+}
+
+window-rule {
+    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    match app-id="zoom"
+    open-floating true
+}
+
+window-rule {
+    match app-id=r#"^org\.quickshell$"#
+    open-floating true
+}
+
+// Strongly Living Weekly is a single, glanceable life map rather than a scrolling column.
+window-rule {
+    match app-id=r#"^[Ss]tronglylivingweekly$"#
+    open-floating true
+    default-column-width { fixed 1180; }
+    default-window-height { fixed 720; }
+    // Match DMS's normal automatic popout gap for a top bar with spacing=4.
+    default-floating-position x=0 y=4 relative-to="top"
+
+    // The app draws its own subtle one-pixel glass edge. Do not layer Niri's
+    // bright two-pixel focus ring behind the transparent surface.
+    focus-ring { off; }
+    opacity 1.0
+
+    background-effect {
+        xray true
+        blur true
+    }
+}
+
+window-rule {
+    match app-id=r#"^steam$"# title=r#"^notificationtoasts_\d+_desktop$"#
+    default-floating-position x=10 y=10 relative-to="bottom-right"
+    open-focused false
+}
+
+// Windows-style recent-window switcher across the laptop display.
+recent-windows {
+    binds {
+        Alt+Tab { next-window scope="output"; }
+        Alt+Shift+Tab { previous-window scope="output"; }
+        Alt+grave { next-window filter="app-id"; }
+        Alt+Shift+grave { previous-window filter="app-id"; }
+    }
+
+    highlight {
+        corner-radius 12
+    }
+}
+
+binds {
+    Mod+Shift+Slash hotkey-overlay-title="Show Niri shortcuts" { show-hotkey-overlay; }
+
+    // Applications and DMS.
+    Mod+Q repeat=false hotkey-overlay-title="Open terminal" { spawn "kitty"; }
+    Mod+T repeat=false hotkey-overlay-title=null { spawn "kitty"; }
+    Mod+E repeat=false hotkey-overlay-title="Open files" { spawn "dolphin"; }
+    Mod+R repeat=false hotkey-overlay-title="Open launcher" { spawn "dms" "ipc" "call" "spotlight" "toggle"; }
+    Mod+Comma repeat=false hotkey-overlay-title="Open settings" { spawn "dms" "ipc" "call" "settings" "focusOrToggle"; }
+    Mod+N repeat=false hotkey-overlay-title="Notifications" { spawn "dms" "ipc" "call" "notifications" "toggle"; }
+    Mod+Y repeat=false hotkey-overlay-title="Wallpapers" { spawn "dms" "ipc" "call" "dankdash" "wallpaper"; }
+    Super+Alt+L repeat=false allow-inhibiting=false hotkey-overlay-title="Lock screen" { spawn "dms" "ipc" "call" "lock" "lock"; }
+
+    // Familiar close and Overview controls.
+    Mod+C repeat=false hotkey-overlay-title="Close window" { close-window; }
+    Alt+F4 repeat=false hotkey-overlay-title=null { close-window; }
+    Mod+O repeat=false hotkey-overlay-title="Overview" { toggle-overview; }
+    Mod+Tab repeat=false hotkey-overlay-title=null { toggle-overview; }
+    Mod+G repeat=false hotkey-overlay-title="Toggle glass for focused window" { toggle-window-rule-opacity; }
+
+    // Focus columns horizontally and stacked windows vertically.
+    Mod+Left { focus-column-left; }
+    Mod+Right { focus-column-right; }
+    Mod+Up { focus-window-up; }
+    Mod+Down { focus-window-down; }
+    Mod+H { focus-column-left; }
+    Mod+L { focus-column-right; }
+    Mod+K { focus-window-up; }
+    Mod+J { focus-window-down; }
+
+    // Shift moves instead of merely focusing.
+    Mod+Shift+Left { move-column-left; }
+    Mod+Shift+Right { move-column-right; }
+    Mod+Shift+Up { move-window-up; }
+    Mod+Shift+Down { move-window-down; }
+    Mod+Ctrl+Left { move-column-left; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+Up { move-window-up; }
+    Mod+Ctrl+Down { move-window-down; }
+
+    Mod+Home { focus-column-first; }
+    Mod+End { focus-column-last; }
+    Mod+Ctrl+Home { move-column-to-first; }
+    Mod+Ctrl+End { move-column-to-last; }
+
+    // External-monitor controls, ready for a dock or USB-C display.
+    Mod+Alt+Left { focus-monitor-left; }
+    Mod+Alt+Right { focus-monitor-right; }
+    Mod+Alt+Up { focus-monitor-up; }
+    Mod+Alt+Down { focus-monitor-down; }
+    Mod+Ctrl+Alt+Left { move-column-to-monitor-left; }
+    Mod+Ctrl+Alt+Right { move-column-to-monitor-right; }
+    Mod+Ctrl+Alt+Up { move-column-to-monitor-up; }
+    Mod+Ctrl+Alt+Down { move-column-to-monitor-down; }
+
+    // Dynamic workspaces: switch with Page Up/Down, U/I, wheel, or number keys.
+    Mod+Page_Down { focus-workspace-down; }
+    Mod+Page_Up { focus-workspace-up; }
+    Mod+U { focus-workspace-down; }
+    Mod+I { focus-workspace-up; }
+    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp cooldown-ms=150 { focus-workspace-up; }
+
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+0 { focus-workspace 10; }
+
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+    Mod+Shift+9 { move-column-to-workspace 9; }
+    Mod+Shift+0 { move-column-to-workspace 10; }
+
+    // Window sizing: 50%, 66%, 100%, fine adjustments, maximize and fullscreen.
+    Mod+Z { switch-preset-column-width; }
+    Mod+Shift+Z { switch-preset-column-width-back; }
+    Mod+Minus { set-column-width "-10%"; }
+    Mod+Equal { set-column-width "+10%"; }
+    Mod+Shift+Minus { set-window-height "-10%"; }
+    Mod+Shift+Equal { set-window-height "+10%"; }
+    Mod+F { maximize-column; }
+    Mod+M { maximize-window-to-edges; }
+    Mod+Shift+F { fullscreen-window; }
+    Mod+Ctrl+F { expand-column-to-available-width; }
+
+    Mod+V { toggle-window-floating; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+    Mod+A { toggle-column-tabbed-display; }
+    Mod+BracketLeft { consume-or-expel-window-left; }
+    Mod+BracketRight { consume-or-expel-window-right; }
+    Mod+Semicolon { center-column; }
+
+    Mod+W repeat=false hotkey-overlay-title="Open Strongly Living Weekly" { spawn "stronglylivingweekly"; }
+    Mod+Space repeat=false { switch-layout "next"; }
+
+    Print { screenshot show-pointer=false; }
+    Ctrl+Print { screenshot-screen show-pointer=false; }
+    Alt+Print { screenshot-window; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "-l" "1" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "-e4" "-n2" "set" "5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "-e4" "-n2" "set" "5%-"; }
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioPause allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Shift+P { power-off-monitors; }
+    Mod+Shift+E { quit; }
+    Ctrl+Alt+Delete { quit; }
+}
+
+// DMS owns these generated fragments once it starts inside Niri.
+include optional=true "dms/colors.kdl"
+include optional=true "dms/layout.kdl"
+include optional=true "dms/alttab.kdl"
+include optional=true "dms/binds.kdl"
+include optional=true "dms/outputs.kdl"
+include optional=true "dms/cursor.kdl"
+include optional=true "dms/windowrules.kdl"
+include optional=true "dms/wpblur.kdl"

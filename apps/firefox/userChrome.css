@@ -1,0 +1,60 @@
+@import url("dms-colors.css");
+
+/* A small, update-resistant Material pass over Firefox's standard layout. */
+:root {
+  --toolbar-bgcolor: var(--md-sys-color-surface) !important;
+  --toolbar-color: var(--md-sys-color-on-surface) !important;
+  --toolbar-field-background-color: var(--md-sys-color-surface-container-high) !important;
+  --toolbar-field-color: var(--md-sys-color-on-surface) !important;
+  --toolbar-field-focus-background-color: var(--md-sys-color-surface-container-highest) !important;
+  --toolbar-field-focus-color: var(--md-sys-color-on-surface) !important;
+  --toolbar-field-border-color: var(--md-sys-color-outline-variant) !important;
+  --lwt-accent-color: var(--md-sys-color-surface) !important;
+  --lwt-text-color: var(--md-sys-color-on-surface) !important;
+  --tab-selected-bgcolor: var(--md-sys-color-primary-container) !important;
+  --tab-selected-textcolor: var(--md-sys-color-on-primary-container) !important;
+  --focus-outline-color: var(--md-sys-color-primary) !important;
+  --arrowpanel-background: var(--md-sys-color-surface-container-high) !important;
+  --arrowpanel-color: var(--md-sys-color-on-surface) !important;
+  --arrowpanel-border-color: var(--md-sys-color-outline-variant) !important;
+  font-family: "JetBrains Mono", system-ui, sans-serif, "Noto Color Emoji" !important;
+}
+
+#navigator-toolbox,
+#titlebar,
+#TabsToolbar,
+#nav-bar,
+#PersonalToolbar,
+#sidebar-box,
+#sidebar-main {
+  background-color: var(--md-sys-color-surface) !important;
+  color: var(--md-sys-color-on-surface) !important;
+  border-color: var(--md-sys-color-outline-variant) !important;
+}
+
+#urlbar-background,
+#searchbar,
+.tab-background,
+menupopup,
+panel {
+  border-radius: 10px !important;
+}
+
+.tabbrowser-tab[selected] .tab-background {
+  background: var(--md-sys-color-primary-container) !important;
+  outline: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 58%, transparent) !important;
+}
+
+.tabbrowser-tab:not([selected]):hover .tab-background,
+toolbarbutton:hover {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 9%, transparent) !important;
+}
+
+#urlbar[focused] > #urlbar-background {
+  border-color: var(--md-sys-color-primary) !important;
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary) !important;
+}
+
+* {
+  scrollbar-color: var(--md-sys-color-primary) var(--md-sys-color-surface-container) !important;
+}

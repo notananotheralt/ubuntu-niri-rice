@@ -1,0 +1,48 @@
+# If you change this file or any /etc/default/grub.d/*.cfg file,
+# run 'update-grub' afterwards to update /boot/grub/grub.cfg.
+# For full documentation of the options in these files, see:
+#   info -f grub -n 'Simple configuration'
+
+GRUB_DEFAULT=0
+GRUB_TIMEOUT_STYLE=menu
+# Require an explicit choice. This prevents a graphical-menu or stale-default
+# problem from ever being activated merely because a countdown expired.
+GRUB_TIMEOUT=-1
+# Ubuntu otherwise substitutes a 30-second countdown after a recorded failed
+# boot. Keep recovery behavior interactive too; never auto-launch an entry.
+GRUB_RECORDFAIL_TIMEOUT=-1
+GRUB_DISTRIBUTOR=`( . /etc/os-release && echo ${NAME} )`
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash console=tty0"
+GRUB_CMDLINE_LINUX=""
+
+# If your computer has multiple operating systems installed, then you
+# probably want to run os-prober. However, if your computer is a host
+# for guest OSes installed via LVM or raw disk devices, running
+# os-prober can cause damage to those guest OSes as it mounts
+# filesystems to look for things.
+GRUB_DISABLE_OS_PROBER=false
+
+# Uncomment to enable BadRAM filtering, modify to suit your needs
+# This works with Linux (no patch required) and with any kernel that obtains
+# the memory map information from GRUB (GNU Mach, kernel of FreeBSD ...)
+#GRUB_BADRAM="0x01234567,0xfefefefe,0x89abcdef,0xefefefef"
+
+# Uncomment to disable graphical terminal
+#GRUB_TERMINAL=console
+
+# The EFI GOP driver reports 1360x855 as its active supported mode. The panel's
+# 1920x1200 EDID preference is not an available GRUB video mode on this laptop.
+GRUB_GFXMODE="1360x855"
+
+# Use the WinTux artwork only as a conventional background. The standard GRUB
+# list supplies the selection highlight and stock Ubuntu scripts supply entries.
+GRUB_BACKGROUND="/boot/grub/wintux-background.png"
+
+# Uncomment if you don't want GRUB to pass "root=UUID=xxx" parameter to Linux
+#GRUB_DISABLE_LINUX_UUID=true
+
+# Uncomment to disable generation of recovery mode menu entries
+#GRUB_DISABLE_RECOVERY="true"
+
+# Uncomment to get a beep at grub start
+#GRUB_INIT_TUNE="480 440 1"

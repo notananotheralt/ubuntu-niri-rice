@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly VIVALDI_PREFERENCES="${HOME}/snap/vivaldi/current/.config/vivaldi/Default/Preferences"
+readonly VIVALDI_CSS_DIRECTORY="${HOME}/snap/vivaldi/common/ricemood-ui"
+
+# Vivaldi only reads the custom-CSS location during startup. Update the JSON
+# preference only while no Vivaldi process owns it, so open tabs and live
+# profile writes are never put at risk.
+if ! pgrep -u "$(id -u)" -f '/snap/vivaldi/[0-9]+/opt/vivaldi/vivaldi' >/dev/null; then
+  python3 - "$VIVALDI_PREFERENCES" "$VIVALDI_CSS_DIRECTORY" <<'PY'
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+
+path = Path(sys.argv[1])
+css_directory = sys.argv[2]
+with path.open(encoding="utf-8") as handle:
+    data = json.load(handle)
+
+appearance = data.setdefault("vivaldi", {}).setdefault("appearance", {})
+appearance["css_ui_mods_directory"] = css_directory
+
+temporary = path.with_name(path.name + ".ricemood-tmp")
+with temporary.open("w", encoding="utf-8") as handle:
+    json.dump(data, handle, separators=(",", ":"), ensure_ascii=False)
+mode = stat.S_IMODE(path.stat().st_mode)
+os.chmod(temporary, mode)
+os.replace(temporary, path)
+PY
+fi
+
+# The local-only debugging endpoint lets the event-driven Ricemood hook replace
+# the browser UI stylesheet in already-open windows. It is bound to loopback,
+# never exposed to the network, and is contacted only after a palette change.
+${HOME}/.local/bin/ricemood-vivaldi-live --wait >/dev/null 2>&1 &
+
+# Vivaldi still loads its normal user profile. The feature flag opts into CSS
+# modifications; the debugging endpoint provides a targeted live refresh.
+exec /snap/bin/vivaldi.vivaldi-stable \
+  --enable-features=VivaldiCssMods \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9229 \
+  "$@"

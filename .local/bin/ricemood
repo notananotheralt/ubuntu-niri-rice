@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly RICEMOOD_ENTRY="${HOME}/Projects/rice-tools/ricemood/dist/bin/ricemood.js"
+readonly SAFE_LAB="${HOME}/rice-lab/ricemood-test"
+
+if [[ ! -f "$RICEMOOD_ENTRY" ]]; then
+  printf 'ricemood is not built yet: %s\n' "$RICEMOOD_ENTRY" >&2
+  exit 1
+fi
+
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    -a|--apply)
+      if (( i + 1 >= ${#args[@]} )); then
+        printf 'Safe wrapper: --apply requires an explicit config inside %s\n' "$SAFE_LAB" >&2
+        exit 2
+      fi
+      config="$(realpath -m "${args[$((i + 1))]}")"
+      case "$config" in
+        "$SAFE_LAB"/*) ;;
+        *)
+          printf 'Safe wrapper blocked an apply outside %s\n' "$SAFE_LAB" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+  esac
+done
+
+exec /usr/bin/node "$RICEMOOD_ENTRY" "$@"
